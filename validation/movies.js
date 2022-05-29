@@ -1,13 +1,14 @@
 const { celebrate, Joi } = require('celebrate');
 const validator = require('validator');
 const ValidationError = require('../errors/validation-err');
+const { urlErrorMessage } = require('../utils/constants');
 
 const urlValidate = (value) => {
   const result = validator.isURL(value);
   if (result) {
     return value;
   }
-  throw new ValidationError('wrong URL');
+  throw new ValidationError(urlErrorMessage);
 };
 
 const postMovieValidation = celebrate({

@@ -5,6 +5,7 @@ const NotFoundError = require('../errors/not-found-err');
 const ValidationError = require('../errors/validation-err');
 const ConflictError = require('../errors/conflict-err');
 const { SALT_ROUNDS, userNotFoundMessage, userConflictMessage } = require('../utils/constants');
+const { JWT_SECRET_DEV } = require('../utils/dev-config');
 
 const { NODE_ENV, JWT_SECRET } = process.env;
 
@@ -18,10 +19,10 @@ module.exports.getUser = (req, res, next) => {
 };
 
 module.exports.updateUser = (req, res, next) => {
-  const { name } = req.body;
+  const { email, name } = req.body;
   User.findByIdAndUpdate(
     req.user._id,
-    { name },
+    { email, name },
     { new: true, runValidators: true },
   ).orFail(() => next(new NotFoundError(userNotFoundMessage)))
     .then((user) => res.send({
@@ -31,9 +32,10 @@ module.exports.updateUser = (req, res, next) => {
     }))
     .catch((err) => {
       if (err.name === 'ValidationError') {
-        return next(new ValidationError(err.message));
-      }
-      return next(err);
+        next(new ValidationError(err.message));
+      } else if (err.code === 11000) {
+        next(new ConflictError(userConflictMessage));
+      } else next(err);
     });
 };
 
@@ -65,7 +67,7 @@ module.exports.login = (req, res, next) => {
 
   return User.findUserByCredentials(email, password)
     .then((user) => {
-      const token = jwt.sign({ _id: user._id }, NODE_ENV === 'production' ? JWT_SECRET : 'dev-secret', { expiresIn: '7d' });
+      const token = jwt.sign({ _id: user._id }, NODE_ENV === 'production' ? JWT_SECRET : JWT_SECRET_DEV, { expiresIn: '7d' });
       res.send({ token });
     })
     .catch(next);

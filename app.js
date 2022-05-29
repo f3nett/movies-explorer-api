@@ -1,21 +1,21 @@
-require('dotenv').config();
+require('dotenv').config({ path: './config.env' });
 const express = require('express');
+const helmet = require('helmet');
 const mongoose = require('mongoose');
 const { errors } = require('celebrate');
-const usersRoutes = require('./routes/users');
-const moviesRoutes = require('./routes/movies');
+const { loginRoutes, protectedRoutes } = require('./routes/index');
 const { cors } = require('./middlewares/cors');
 const { requestLogger, errorLogger } = require('./middlewares/logger');
 const auth = require('./middlewares/auth');
 const { wrongPathHandler, errHandler } = require('./middlewares/errhandler');
-const { signinValidation, signupValidation } = require('./validation/signin');
-const { login, createUser } = require('./controllers/users');
 const { rateLimiter } = require('./middlewares/rateLimiter');
+const { MONGODB_DEV } = require('./utils/dev-config');
 
-const { PORT = 3000 } = process.env;
+const { PORT = 3000, NODE_ENV, MONGODB } = process.env;
 const app = express();
 
 app.enable('trust proxy');
+app.use(helmet());
 app.use(express.json());
 app.use(cors);
 
@@ -24,34 +24,34 @@ app.use((req, res, next) => {
   next();
 });
 
-// ограничение на кол-во запросов от одного IP на единицу времени
-app.use(rateLimiter);
-
 // логгер запросов
 app.use(requestLogger);
 
+// ограничение на кол-во запросов от одного IP на единицу времени
+app.use(rateLimiter);
+
 // руты, не требующие авторизации
-app.post('/signin', signinValidation, login);
-app.post('/signup', signupValidation, createUser);
+app.use(loginRoutes);
 
 // авторизация
 app.use(auth);
 
 // руты, требующие авторизации
-app.use('/users', usersRoutes);
-app.use('/movies', moviesRoutes);
+app.use(protectedRoutes);
+
+// некорректный рут
+app.use(wrongPathHandler);
 
 // логгер ошибок
 app.use(errorLogger);
 
 // обработчики ошибок
-app.use(wrongPathHandler);
 app.use(errors());
 app.use(errHandler);
 
 // подключение к серверу mongo
 async function main() {
-  await mongoose.connect('mongodb://localhost:27017/moviesdb');
+  await mongoose.connect(NODE_ENV === 'production' ? MONGODB : MONGODB_DEV);
 
   app.listen(PORT, () => {
     console.log(`App listening on port ${PORT}`);
